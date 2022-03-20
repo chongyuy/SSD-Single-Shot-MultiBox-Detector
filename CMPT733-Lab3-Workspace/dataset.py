@@ -32,7 +32,6 @@ def default_box_generator(layers, large_scale, small_scale):
     #for a cell in layer[i], you should use ssize=small_scale[i] and lsize=large_scale[i].
     #the last dimension 8 means each default bounding box has 8 attributes: [x_center, y_center, box_width, box_height, x_min, y_min, x_max, y_max]
     boxes = []
-    grid_num = 10 * 10 + 5 * 5 + 3 * 3 + 1 * 1
     box_num = 4 * (10 * 10 + 5 * 5 + 3 * 3 + 1 * 1)
     for k in range(len(layers)):
         start_x = (1/layers[k])/2
@@ -51,7 +50,8 @@ def default_box_generator(layers, large_scale, small_scale):
             box_for_4.append([x_center,y_center,lsize*np.sqrt(2),lsize/np.sqrt(2),x_center-(lsize*np.sqrt(2))/2,y_center-(lsize/np.sqrt(2))/2,x_center+(lsize*np.sqrt(2))/2,y_center+(lsize/np.sqrt(2))/2])
             box_for_4.append([x_center,y_center,lsize/np.sqrt(2),lsize*np.sqrt(2),x_center-(lsize/np.sqrt(2))/2,y_center-(lsize*np.sqrt(2))/2,x_center+(lsize/np.sqrt(2))/2,y_center+(lsize*np.sqrt(2))/2])
             boxes.append(box_for_4)
-            
+    boxes = np.array(boxes) 
+    boxes = np.reshape(boxes,(box_num,8))         
     return boxes
 
 

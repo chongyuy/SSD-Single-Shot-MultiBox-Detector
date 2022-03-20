@@ -38,7 +38,9 @@ def default_box_generator(layers, large_scale, small_scale):
             box_for_4.append([x_center,y_center,lsize*np.sqrt(2),lsize/np.sqrt(2),x_center-(lsize*np.sqrt(2))/2,y_center-(lsize/np.sqrt(2))/2,x_center+(lsize*np.sqrt(2))/2,y_center+(lsize/np.sqrt(2))/2])
             box_for_4.append([x_center,y_center,lsize/np.sqrt(2),lsize*np.sqrt(2),x_center-(lsize/np.sqrt(2))/2,y_center-(lsize*np.sqrt(2))/2,x_center+(lsize/np.sqrt(2))/2,y_center+(lsize*np.sqrt(2))/2])
             boxes.append(box_for_4)
-    boxes = np.array(boxes)       
+    boxes = np.array(boxes)     
+    boxes = np.reshape(boxes,(box_num,8))         
+  
     return boxes
 
 larers = [10,5,3,1]
@@ -46,4 +48,4 @@ large_scale = [0.2,0.4,0.6,0.8]
 small_scale =  [0.1,0.3,0.5,0.7]
 
 boxes = default_box_generator(larers, large_scale, small_scale)
-print(boxes[0][3])
+print(boxes[0])
