@@ -47,5 +47,65 @@ larers = [10,5,3,1]
 large_scale = [0.2,0.4,0.6,0.8]
 small_scale =  [0.1,0.3,0.5,0.7]
 
-boxes = default_box_generator(larers, large_scale, small_scale)
-print(boxes[0])
+# boxes = default_box_generator(larers, large_scale, small_scale)
+# print(boxes[0])
+
+def conv_basic(in_planes, out_planes, kernelsize, stride):
+    padding = (kernelsize-1) // 2
+    x = nn.Sequential(
+            nn.Conv2d(in_planes, out_planes, kernel_size=kernelsize, stride=stride, padding=padding),
+            nn.BatchNorm2d(out_planes),
+            nn.ReLU(True),
+        )
+    return x
+
+
+
+import torch
+import torch.nn as nn
+
+x = np.zeros([1,3,320,320])
+x = torch.Tensor(x)
+# x = conv_basic(3, 64, 3, 2)(x)
+# x = conv_basic(64, 64, 3, 1)(x)
+# x = conv_basic(64, 64, 3, 1)(x)
+# x = conv_basic(64, 128, 3, 2)(x)
+# x = conv_basic(128, 128, 3, 1)(x)
+# x = conv_basic(128, 128, 3, 1)(x)
+# x = conv_basic(128, 256, 3, 2)(x)
+# x = conv_basic(256, 256, 3, 1)(x)
+# x = conv_basic(256, 256, 3, 1)(x)
+# x = conv_basic(256, 512, 3, 2)(x)
+# x = conv_basic(512, 512, 3, 1)(x)
+# x = conv_basic(512, 512, 3, 1)(x)
+# x = conv_basic(512, 256, 3, 2)(x)
+# def conv_reshape(x,in_planes, out_planes, kernelsize, stride):
+#     padding = (kernelsize-1) // 2
+#     x = nn.Conv2d(in_planes, out_planes, kernel_size=kernelsize, stride=stride, padding=padding)(x)
+#     x = x.reshape((x.shape[0],x.shape[1],x.shape[2]*x.shape[3]))
+#     return x
+# y = conv_reshape(x,256,16,3,1)
+# z = np.zeros([1,16,1])
+# z = torch.Tensor(z)
+# a = np.zeros([1,16,9])
+# a = torch.Tensor(a)
+# b = torch.cat((y,z,a),2)
+# print(b.shape)
+
+
+# def conv3x3(in_planes, out_planes, stride=1):
+#     """3x3 convolution with padding"""
+#     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+# conv1 = conv3x3(3, 64, 2)
+# out = conv1(x)
+# print(out.shape)
+from model import *
+
+network = SSD(4)
+z,y = network.forward(x)
+print(z.shape)
+print(y.shape)
+# x = torch.rand((1, 256, 3, 3))
+# x = nn.Conv2d(256,256,kernel_size=3,stride=3,padding=1)(x)
+# print(x.shape)
+

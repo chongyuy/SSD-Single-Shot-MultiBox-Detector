@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import cv2
-
+from PIL import Image
 #generate default bounding boxes
 def default_box_generator(layers, large_scale, small_scale):
     #input:
@@ -65,12 +65,16 @@ def iou(boxs_default, x_min,y_min,x_max,y_max):
     
     #output:
     #ious between the "boxes" and the "another box": [iou(box_1,box_r), iou(box_2,box_r), ...], shape = [num_of_boxes]
-    
+    #Calculate the coverage between two bounding boxes
     inter = np.maximum(np.minimum(boxs_default[:,6],x_max)-np.maximum(boxs_default[:,4],x_min),0)*np.maximum(np.minimum(boxs_default[:,7],y_max)-np.maximum(boxs_default[:,5],y_min),0)
     area_a = (boxs_default[:,6]-boxs_default[:,4])*(boxs_default[:,7]-boxs_default[:,5])
     area_b = (x_max-x_min)*(y_max-y_min)
     union = area_a + area_b - inter
-    return inter/np.maximum(union,1e-8)
+    res = inter/np.maximum(union,1e-8)
+    # ious_true = res>0.5
+    # print(ious_true)
+    #The closer the return value is to 1, the more consistent the two bounding boxes are
+    return res
 
 
 
@@ -82,17 +86,35 @@ def match(ann_box,ann_confidence,boxs_default,threshold,cat_id,x_min,y_min,x_max
     #threshold               -- if a default bounding box and the ground truth bounding box have iou>threshold, then this default bounding box will be used as an anchor
     #cat_id                  -- class id, 0-cat, 1-dog, 2-person
     #x_min,y_min,x_max,y_max -- bounding box
-    
+
+    # for i in range(boxs_default.shape[0]):
+
     #compute iou between the default bounding boxes and the ground truth bounding box
+    x_center, y_center, box_width, box_height = (x_min+x_max)/2, (y_min+y_max)/2, (x_max-x_min), (y_max-y_min)
     ious = iou(boxs_default, x_min,y_min,x_max,y_max)
-    
     ious_true = ious>threshold
+    true_idx = [index for (index,value) in enumerate(ious_true) if value == True]
+    print(true_idx)
+    for i in true_idx:
+        ann_confidence[i][3] = 0
+        ann_confidence[i][cat_id] = 1
+        ann_box[i][0] = (x_center-boxs_default[i][0])/boxs_default[i][2]
+        ann_box[i][1] = (y_center-boxs_default[i][1])/boxs_default[i][3]
+        ann_box[i][2] = np.log(box_width/boxs_default[i][2])
+        ann_box[i][3] = np.log(box_height/boxs_default[i][3])
     #TODO:
     #update ann_box and ann_confidence, with respect to the ious and the default bounding boxes.
     #if a default bounding box and the ground truth bounding box have iou>threshold, then we will say this default bounding box is carrying an object.
     #this default bounding box will be used to update the corresponding entry in ann_box and ann_confidence
     
     ious_true = np.argmax(ious)
+    print(ious_true)
+    ann_confidence[ious_true][3] = 0
+    ann_confidence[ious_true][cat_id] = 1
+    ann_box[ious_true][0] = (x_center-boxs_default[ious_true][0])/boxs_default[ious_true][2]
+    ann_box[ious_true][1] = (y_center-boxs_default[ious_true][1])/boxs_default[ious_true][3]
+    ann_box[ious_true][2] = np.log(box_width/boxs_default[ious_true][2])
+    ann_box[ious_true][3] = np.log(box_height/boxs_default[ious_true][3])
     #TODO:
     #make sure at least one default bounding box is used
     #update ann_box and ann_confidence (do the same thing as above)
@@ -130,13 +152,43 @@ class COCO(torch.utils.data.Dataset):
         #[0,0,0,1] -> background
         
         ann_confidence[:,-1] = 1 #the default class for all cells is set to "background"
-        
-        img_name = self.imgdir+self.img_names[index]
-        ann_name = self.anndir+self.img_names[index][:-3]+"txt"
+        # print(os.listdir(self.imgdir))
+        # data spliting
+        image_train_number = int(len(self.img_names)*0.9)
+        image_train = self.img_names[0:image_train_number]
+        image_test = self.img_names[image_train_number:len(self.img_names)]
+        if self.train:       
+            img_name = self.imgdir+image_train[index]
+            ann_name = self.anndir+image_train[index][:-3]+"txt"
+        else:
+            img_name = self.imgdir+image_test[index]
+            ann_name = self.anndir+image_test[index][:-3]+"txt"
         
         #TODO:
         #1. prepare the image [3,320,320], by reading image "img_name" first.
+        image = Image.open(img_name)
+        # image =transforms.Resize([self.image_size,self.image_size])(image)
+        image = np.asarray(image)
+        height = image.shape[0]
+        # width = 640,height = 480
+        width = image.shape[1]
+        # print(width)
         #2. prepare ann_box and ann_confidence, by reading txt file "ann_name" first.
+        with open(ann_name, 'r') as f:
+            for line in f:
+                class_id, x_min, y_min, box_width, box_height = line.split()
+                class_id = int(class_id)
+                x_min = float(x_min)
+                y_min = float(y_min)
+                box_width = float(box_width)
+                box_height = float(box_height)
+                x_min_norm = x_min/width
+                y_min_norm = y_min/height
+                box_width_norm = box_width/width
+                box_height_norm = box_height/height
+                x_max_norm,y_max_norm = x_min_norm+box_width_norm, y_min_norm+box_height_norm
+                match(ann_box,ann_confidence,self.boxs_default,self.threshold,class_id,x_min_norm,y_min_norm,x_max_norm,y_max_norm)
+        
         #3. use the above function "match" to update ann_box and ann_confidence, for each bounding box in "ann_name".
         #4. Data augmentation. You need to implement random cropping first. You can try adding other augmentations to get better results.
         
@@ -146,8 +198,30 @@ class COCO(torch.utils.data.Dataset):
         
         #note: please make sure x_min,y_min,x_max,y_max are normalized with respect to the width or height of the image.
         #For example, point (x=100, y=200) in a image with (width=1000, height=500) will be normalized to (x/width=0.1,y/height=0.4)
-        
-        
+        image = torch.from_numpy(image)
+        image =  torch.permute(image, (2, 0, 1))
+        # print(image.shape)
+        image =transforms.Resize([self.image_size,self.image_size])(image)
+        ann_box = torch.from_numpy(ann_box)
+        ann_confidence = torch.from_numpy(ann_confidence)
         return image, ann_box, ann_confidence
 
 
+
+###############################################################################
+########################test code##############################################
+###############################################################################
+###############################################################################
+class_num = 4
+boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
+# print(boxs_default)
+# res = iou(boxs_default,0, 0, 0.1, 0.1)
+image, ann_box, ann_confidence = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320).__getitem__(4)
+from model import *
+image = image.reshape((1,image.shape[0],image.shape[1],image.shape[2]))
+network = SSD(class_num)
+z,y = network.forward(image)
+print(z.shape)
+print(y.shape)
+# np.set_printoptions(threshold=np.inf)
+# print(ann_confidence)
