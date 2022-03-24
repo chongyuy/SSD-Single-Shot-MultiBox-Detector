@@ -64,8 +64,8 @@ def conv_basic(in_planes, out_planes, kernelsize, stride):
 import torch
 import torch.nn as nn
 
-x = np.zeros([1,3,320,320])
-x = torch.Tensor(x)
+# x = np.zeros([1,3,320,320])
+# x = torch.Tensor(x)
 # x = conv_basic(3, 64, 3, 2)(x)
 # x = conv_basic(64, 64, 3, 1)(x)
 # x = conv_basic(64, 64, 3, 1)(x)
@@ -101,11 +101,30 @@ x = torch.Tensor(x)
 # print(out.shape)
 from model import *
 
-network = SSD(4)
-z,y = network.forward(x)
-print(z.shape)
-print(y.shape)
+# network = SSD(4)
+# z,y = network.forward(x)
+# print(z.shape)
+# print(y.shape)
 # x = torch.rand((1, 256, 3, 3))
 # x = nn.Conv2d(256,256,kernel_size=3,stride=3,padding=1)(x)
 # print(x.shape)
+import torch.nn.functional as F
 
+
+# x = torch.randn((2,3))
+
+# print(x)
+# print(x[0:1])
+# print(x[1:2])
+# input = torch.randn(1,8)
+# target = torch.randn(1, 8).softmax(dim=1)
+# entropy_loss = nn.CrossEntropyLoss()
+
+# print(F.smooth_l1_loss(input,target))
+
+pred_confidence, pred_box, ann_confidence = torch.randn(32,540,4), torch.randn(32,540,4), torch.randn(32,540,4)
+ann_box = torch.zeros(32,540,4)
+x = torch.randint(0,100,8)
+ann_box[:,:,-1] = 1
+print()
+# print(SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box))

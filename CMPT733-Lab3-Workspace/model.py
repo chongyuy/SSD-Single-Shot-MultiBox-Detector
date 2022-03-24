@@ -23,32 +23,57 @@ def conv_basic(in_planes, out_planes, kernelsize, stride):
     return x
 def conv_reshape(x,in_planes, out_planes, kernelsize, stride):
     padding = (kernelsize-1) // 2
-    x = nn.Conv2d(in_planes, out_planes, kernel_size=kernelsize, stride=stride, padding=padding)(x)
+    conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernelsize, stride=stride, padding=padding).cuda()
+    x = conv(x)
     x = x.reshape((x.shape[0],x.shape[1],x.shape[2]*x.shape[3]))
     return x
 
 
-# def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
-#     #input:
-#     #pred_confidence -- the predicted class labels from SSD, [batch_size, num_of_boxes, num_of_classes]
-#     #pred_box        -- the predicted bounding boxes from SSD, [batch_size, num_of_boxes, 4]
-#     #ann_confidence  -- the ground truth class labels, [batch_size, num_of_boxes, num_of_classes]
-#     #ann_box         -- the ground truth bounding boxes, [batch_size, num_of_boxes, 4]
-#     #
-#     #output:
-#     #loss -- a single number for the value of the loss function, [1]
+def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
+    #input:
+    #pred_confidence -- the predicted class labels from SSD, [batch_size, num_of_boxes, num_of_classes]
+    #pred_box        -- the predicted bounding boxes from SSD, [batch_size, num_of_boxes, 4]
+    #ann_confidence  -- the ground truth class labels, [batch_size, num_of_boxes, num_of_classes]
+    #ann_box         -- the ground truth bounding boxes, [batch_size, num_of_boxes, 4]
+    #
+    #output:
+    #loss -- a single number for the value of the loss function, [1]
+    pred_confidence = pred_confidence.reshape((pred_confidence.shape[0]*pred_confidence.shape[1], pred_confidence.shape[2]))
+    pred_box = pred_box.reshape((pred_box.shape[0]*pred_box.shape[1], pred_box.shape[2]))
+    ann_confidence = ann_confidence.reshape((ann_confidence.shape[0]*ann_confidence.shape[1], ann_confidence.shape[2]))
+    ann_box = ann_box.reshape((ann_box.shape[0]*ann_box.shape[1], ann_box.shape[2]))
+    x_obj = []
+    x_noob = []
+    entropy_loss = nn.CrossEntropyLoss()
+    sum_obj_entro = 0.0
+    sum_noob_entro = 0.0
+    sum_L1 = 0.0
+    for i in range(ann_confidence.shape[0]):
+        if ann_confidence[i][3] == 1:
+            x_obj.append(0)
+            x_noob.append(1)
+        else:
+            x_obj.append(1)
+            x_noob.append(0)
     
-#     #TODO: write a loss function for SSD
-#     #
-#     #For confidence (class labels), use cross entropy (F.cross_entropy)
-#     #You can try F.binary_cross_entropy and see which loss is better
-#     #For box (bounding boxes), use smooth L1 (F.smooth_l1_loss)
-#     #
-#     #Note that you need to consider cells carrying objects and empty cells separately.
-#     #I suggest you to reshape confidence to [batch_size*num_of_boxes, num_of_classes]
-#     #and reshape box to [batch_size*num_of_boxes, 4].
-#     #Then you need to figure out how you can get the indices of all cells carrying objects,
-#     #and use confidence[indices], box[indices] to select those cells.
+    for i in range(ann_box.shape[0]):
+        sum_obj_entro += x_obj[i] * entropy_loss(pred_confidence[i:i+1],ann_confidence[i:i+1])
+        sum_noob_entro += x_noob[i] * entropy_loss(pred_confidence[i:i+1],ann_confidence[i:i+1])
+        sum_L1 += x_obj[i] * F.smooth_l1_loss(pred_box[i:i+1], ann_box[i:i+1])
+    L_cls = (1/sum(x_obj)) * sum_obj_entro +3 * (1/sum(x_noob))*sum_noob_entro
+    L_box = (1/sum(x_obj)) * sum_L1
+    return L_cls + L_box
+    #TODO: write a loss function for SSD
+    #
+    #For confidence (class labels), use cross entropy (F.cross_entropy)
+    #You can try F.binary_cross_entropy and see which loss is better
+    #For box (bounding boxes), use smooth L1 (F.smooth_l1_loss)
+    #
+    #Note that you need to consider cells carrying objects and empty cells separately.
+    #I suggest you to reshape confidence to [batch_size*num_of_boxes, num_of_classes]
+    #and reshape box to [batch_size*num_of_boxes, 4].
+    #Then you need to figure out how you can get the indices of all cells carrying objects,
+    #and use confidence[indices], box[indices] to select those cells.
 
 
 
@@ -104,19 +129,22 @@ class SSD(nn.Module):
         out = self.conv11(out)
         out = self.conv12(out)
         out = self.conv13(out)
+        # 10 * 10
         right_res1 = conv_reshape(out,256,16,3,1)
         left_res1 = conv_reshape(out,256,16,3,1)
         out = self.conv14(out)
         out = self.conv15(out)
+        # 5 * 5
         right_res2 = conv_reshape(out,256,16,3,1)
         left_res2 = conv_reshape(out,256,16,3,1)
         out = self.conv16(out)
         out = self.conv17(out)
+        # 3 * 3
         right_res3 = conv_reshape(out,256,16,3,1)
         left_res3 = conv_reshape(out,256,16,3,1)
         out = self.conv18(out)
-        print(out.shape)
         out = self.conv19(out)
+        # 1 * 1
         right_res4 = conv_reshape(out,256,16,1,1)
         left_res4 = conv_reshape(out,256,16,1,1)
 
@@ -129,11 +157,13 @@ class SSD(nn.Module):
         # print(left_res2.shape)
         # print(left_res3.shape)
         # print(left_res4.shape)
+
+        # the concatenating order need to be the same as default bounding box !!!!!!!!!!!!!!!!!!!!!!!!
         confidence = torch.cat((left_res1,left_res2,left_res3,left_res4),2)
         bboxes = torch.cat((right_res1,right_res2,right_res3,right_res4),2)
         confidence =  torch.permute(confidence, (0, 2, 1))
         bboxes =  torch.permute(bboxes, (0, 2, 1))
-        confidence = confidence.reshape((confidence.shape[0],540,4))
+        confidence = confidence.reshape((confidence.shape[0],540,self.class_num))
         m = nn.Softmax()
         confidence = m(confidence)
         bboxes = bboxes.reshape((bboxes.shape[0],540,4))

@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from dataset import *
 from model import *
-from utils import *
+# from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--test', action='store_true')
@@ -31,7 +31,7 @@ args = parser.parse_args()
 class_num = 4 #cat dog person background
 
 num_epochs = 100
-batch_size = 32
+batch_size = 4
 
 
 boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
@@ -44,8 +44,8 @@ cudnn.benchmark = True
 
 
 if not args.test:
-    dataset = COCO("data/train/images/", "data/train/annotations/", class_num, boxs_default, train = True, image_size=320)
-    dataset_test = COCO("data/train/images/", "data/train/annotations/", class_num, boxs_default, train = False, image_size=320)
+    dataset = COCO("data/data/data/train/images/", "data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320)
+    dataset_test = COCO("data/data/data/train/images/", "data/data/data/train/annotations/", class_num, boxs_default, train = False, image_size=320)
     
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=batch_size, shuffle=True, num_workers=0)
@@ -54,7 +54,6 @@ if not args.test:
     #feel free to try other optimizers and parameters.
     
     start_time = time.time()
-
     for epoch in range(num_epochs):
         #TRAINING
         network.train()
@@ -70,6 +69,7 @@ if not args.test:
             optimizer.zero_grad()
             pred_confidence, pred_box = network(images)
             loss_net = SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box)
+            print(loss_net.data)
             loss_net.backward()
             optimizer.step()
             
@@ -81,7 +81,7 @@ if not args.test:
         #visualize
         pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
         pred_box_ = pred_box[0].detach().cpu().numpy()
-        visualize_pred("train", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
+        # visualize_pred("train", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
         
         
         #VALIDATION
@@ -107,7 +107,7 @@ if not args.test:
         #visualize
         pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
         pred_box_ = pred_box[0].detach().cpu().numpy()
-        visualize_pred("val", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
+        # visualize_pred("val", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
         
         #optional: compute F1
         #F1score = 2*precision*recall/np.maximum(precision+recall,1e-8)
@@ -122,7 +122,7 @@ if not args.test:
 
 else:
     #TEST
-    dataset_test = COCO("data/test/images/", "data/test/annotations/", class_num, boxs_default, train = False, image_size=320)
+    dataset_test = COCO("data/data/data/test/images/", "data/data/data/test/annotations/", class_num, boxs_default, train = False, image_size=320)
     dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=1, shuffle=False, num_workers=0)
     network.load_state_dict(torch.load('network.pth'))
     network.eval()
@@ -143,7 +143,7 @@ else:
         #TODO: save predicted bounding boxes and classes to a txt file.
         #you will need to submit those files for grading this assignment
         
-        visualize_pred("test", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
+        # visualize_pred("test", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
         cv2.waitKey(1000)
 
 

@@ -94,7 +94,7 @@ def match(ann_box,ann_confidence,boxs_default,threshold,cat_id,x_min,y_min,x_max
     ious = iou(boxs_default, x_min,y_min,x_max,y_max)
     ious_true = ious>threshold
     true_idx = [index for (index,value) in enumerate(ious_true) if value == True]
-    print(true_idx)
+    # print(true_idx)
     for i in true_idx:
         ann_confidence[i][3] = 0
         ann_confidence[i][cat_id] = 1
@@ -108,7 +108,7 @@ def match(ann_box,ann_confidence,boxs_default,threshold,cat_id,x_min,y_min,x_max
     #this default bounding box will be used to update the corresponding entry in ann_box and ann_confidence
     
     ious_true = np.argmax(ious)
-    print(ious_true)
+    # print(ious_true)
     ann_confidence[ious_true][3] = 0
     ann_confidence[ious_true][cat_id] = 1
     ann_box[ious_true][0] = (x_center-boxs_default[ious_true][0])/boxs_default[ious_true][2]
@@ -140,7 +140,11 @@ class COCO(torch.utils.data.Dataset):
         #you can split the dataset into 90% training and 10% validation here, by slicing self.img_names with respect to self.train
 
     def __len__(self):
-        return len(self.img_names)
+        image_train_number = int(len(self.img_names)*0.9)
+        if self.train:
+            return len(self.img_names[0:image_train_number])
+        else:
+            return len(self.img_names[image_train_number:len(self.img_names)])
 
     def __getitem__(self, index):
         ann_box = np.zeros([self.box_num,4], np.float32) #bounding boxes
@@ -155,6 +159,7 @@ class COCO(torch.utils.data.Dataset):
         # print(os.listdir(self.imgdir))
         # data spliting
         image_train_number = int(len(self.img_names)*0.9)
+        
         image_train = self.img_names[0:image_train_number]
         image_test = self.img_names[image_train_number:len(self.img_names)]
         if self.train:       
@@ -199,6 +204,7 @@ class COCO(torch.utils.data.Dataset):
         #note: please make sure x_min,y_min,x_max,y_max are normalized with respect to the width or height of the image.
         #For example, point (x=100, y=200) in a image with (width=1000, height=500) will be normalized to (x/width=0.1,y/height=0.4)
         image = torch.from_numpy(image)
+        # print(image.shape)
         image =  torch.permute(image, (2, 0, 1))
         # print(image.shape)
         image =transforms.Resize([self.image_size,self.image_size])(image)
@@ -212,16 +218,19 @@ class COCO(torch.utils.data.Dataset):
 ########################test code##############################################
 ###############################################################################
 ###############################################################################
-class_num = 4
-boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
+# class_num = 4
+# boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
 # print(boxs_default)
-# res = iou(boxs_default,0, 0, 0.1, 0.1)
-image, ann_box, ann_confidence = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320).__getitem__(4)
-from model import *
-image = image.reshape((1,image.shape[0],image.shape[1],image.shape[2]))
-network = SSD(class_num)
-z,y = network.forward(image)
-print(z.shape)
-print(y.shape)
-# np.set_printoptions(threshold=np.inf)
-# print(ann_confidence)
+# # res = iou(boxs_default,0, 0, 0.1, 0.1)
+# image, ann_box, ann_confidence = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320).__getitem__(4)
+# from model import *
+# image = image.reshape((1,image.shape[0],image.shape[1],image.shape[2]))
+# ann_box = ann_box.reshape((1,ann_box.shape[0],ann_box.shape[1]))
+# ann_confidence = ann_confidence.reshape((1,ann_confidence.shape[0],ann_confidence.shape[1]))
+# network = SSD(class_num)
+# pred_conf,pred_bbox = network.forward(image)
+# # print(sum(ann_confidence))
+# # np.set_printoptions(threshold=np.inf)
+# # print(ann_confidence)
+# x = SSD_loss(pred_conf, pred_bbox, ann_confidence, ann_box)
+# print(x)
