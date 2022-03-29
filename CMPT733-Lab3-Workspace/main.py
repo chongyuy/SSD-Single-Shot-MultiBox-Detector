@@ -14,10 +14,10 @@ import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torch.autograd import Variable
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 from dataset import *
 from model import *
-# from utils import *
+from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--test', action='store_true')
@@ -31,7 +31,7 @@ args = parser.parse_args()
 class_num = 4 #cat dog person background
 
 num_epochs = 100
-batch_size = 4
+batch_size = 16
 
 
 boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
@@ -40,12 +40,14 @@ boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5
 #Create network
 network = SSD(class_num)
 network.cuda()
+network.load_state_dict(torch.load('network.pth'))
+network.eval()
 cudnn.benchmark = True
 
 
 if not args.test:
-    dataset = COCO("data/data/data/train/images/", "data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320)
-    dataset_test = COCO("data/data/data/train/images/", "data/data/data/train/annotations/", class_num, boxs_default, train = False, image_size=320)
+    dataset = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320)
+    dataset_test = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = False, image_size=320)
     
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=batch_size, shuffle=True, num_workers=0)
@@ -57,31 +59,45 @@ if not args.test:
     for epoch in range(num_epochs):
         #TRAINING
         network.train()
-
+        print("starting epoch:" + str(epoch))
         avg_loss = 0
         avg_count = 0
         for i, data in enumerate(dataloader, 0):
             images_, ann_box_, ann_confidence_ = data
+            # image_res = images_[0].numpy()
+            # image_res = np.transpose(image_res, (1,2,0)).astype(np.uint8)
+            # plt.imshow(image_res)
+            # plt.savefig("img.png")
+            # print(ann_box_[0].shape)
             images = images_.cuda()
             ann_box = ann_box_.cuda()
             ann_confidence = ann_confidence_.cuda()
-
-            optimizer.zero_grad()
+            # print(images_[0].numpy())
+            
             pred_confidence, pred_box = network(images)
+            optimizer.zero_grad()
             loss_net = SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box)
             print(loss_net.data)
             loss_net.backward()
+            # for name, parms in network.named_parameters():	
+            #     print('-->name:', name, '-->grad_requirs:',parms.requires_grad, \
+            #         ' -->grad_value:',parms.grad)
+
             optimizer.step()
             
             avg_loss += loss_net.data
             avg_count += 1
-
+            # pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
+            # pred_box_ = pred_box[0].detach().cpu().numpy()
+            # pred_confidence_,pred_box_ = non_maximum_suppression(pred_confidence_,pred_box_,boxs_default)
+            # visualize_pred("train", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
         print('[%d] time: %f train loss: %f' % (epoch, time.time()-start_time, avg_loss/avg_count))
         
         #visualize
         pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
         pred_box_ = pred_box[0].detach().cpu().numpy()
-        # visualize_pred("train", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
+        
+        visualize_pred("train", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
         
         
         #VALIDATION
@@ -107,7 +123,7 @@ if not args.test:
         #visualize
         pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
         pred_box_ = pred_box[0].detach().cpu().numpy()
-        # visualize_pred("val", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
+        visualize_pred("val", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(), images_[0].numpy(), boxs_default)
         
         #optional: compute F1
         #F1score = 2*precision*recall/np.maximum(precision+recall,1e-8)
@@ -122,7 +138,7 @@ if not args.test:
 
 else:
     #TEST
-    dataset_test = COCO("data/data/data/test/images/", "data/data/data/test/annotations/", class_num, boxs_default, train = False, image_size=320)
+    dataset_test = COCO("CMPT733-Lab3-Workspace/data/data/data/test/images/", "CMPT733-Lab3-Workspace/data/data/data/test/annotations/", class_num, boxs_default, train = False, image_size=320)
     dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=1, shuffle=False, num_workers=0)
     network.load_state_dict(torch.load('network.pth'))
     network.eval()

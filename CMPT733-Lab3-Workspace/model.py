@@ -21,12 +21,6 @@ def conv_basic(in_planes, out_planes, kernelsize, stride):
             nn.ReLU(True),
         )
     return x
-def conv_reshape(x,in_planes, out_planes, kernelsize, stride):
-    padding = (kernelsize-1) // 2
-    conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernelsize, stride=stride, padding=padding).cuda()
-    x = conv(x)
-    x = x.reshape((x.shape[0],x.shape[1],x.shape[2]*x.shape[3]))
-    return x
 
 
 def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
@@ -38,31 +32,33 @@ def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
     #
     #output:
     #loss -- a single number for the value of the loss function, [1]
-    pred_confidence = pred_confidence.reshape((pred_confidence.shape[0]*pred_confidence.shape[1], pred_confidence.shape[2]))
-    pred_box = pred_box.reshape((pred_box.shape[0]*pred_box.shape[1], pred_box.shape[2]))
-    ann_confidence = ann_confidence.reshape((ann_confidence.shape[0]*ann_confidence.shape[1], ann_confidence.shape[2]))
-    ann_box = ann_box.reshape((ann_box.shape[0]*ann_box.shape[1], ann_box.shape[2]))
+    batch = pred_confidence.shape[0]
+    # print(batch)
+    size_1 = pred_confidence.shape[0]*pred_confidence.shape[1]
+    pred_confidence = pred_confidence.reshape((size_1, pred_confidence.shape[2]))
+    pred_box = pred_box.reshape((size_1, pred_box.shape[2]))
+    ann_confidence = ann_confidence.reshape((size_1, ann_confidence.shape[2]))
+    ann_box = ann_box.reshape((size_1, ann_box.shape[2]))
     x_obj = []
     x_noob = []
-    entropy_loss = nn.CrossEntropyLoss()
-    sum_obj_entro = 0.0
-    sum_noob_entro = 0.0
-    sum_L1 = 0.0
-    for i in range(ann_confidence.shape[0]):
-        if ann_confidence[i][3] == 1:
-            x_obj.append(0)
-            x_noob.append(1)
-        else:
-            x_obj.append(1)
-            x_noob.append(0)
-    
-    for i in range(ann_box.shape[0]):
-        sum_obj_entro += x_obj[i] * entropy_loss(pred_confidence[i:i+1],ann_confidence[i:i+1])
-        sum_noob_entro += x_noob[i] * entropy_loss(pred_confidence[i:i+1],ann_confidence[i:i+1])
-        sum_L1 += x_obj[i] * F.smooth_l1_loss(pred_box[i:i+1], ann_box[i:i+1])
-    L_cls = (1/sum(x_obj)) * sum_obj_entro +3 * (1/sum(x_noob))*sum_noob_entro
-    L_box = (1/sum(x_obj)) * sum_L1
-    return L_cls + L_box
+
+    x_noob = ann_confidence[:,3]
+    x_obj = 1-x_noob
+
+    noob = x_noob.cpu().numpy()
+    ob = x_obj.cpu().numpy()
+    x_noob = np.where(noob==1)
+    x_obj = np.where(ob == 1)
+    conf_pred_ob = pred_confidence[x_obj]
+    conf_pred_noob = pred_confidence[x_noob]
+    conf_ann_ob = ann_confidence[x_obj]
+    conf_ann_noob = ann_confidence[x_noob]
+    pred_box_ob = pred_box[x_obj]
+    ann_box_ob = ann_box[x_obj]
+    L_cls = F.cross_entropy(conf_pred_ob, conf_ann_ob) +3 * F.cross_entropy(conf_pred_noob, conf_ann_noob)
+    L_box = F.smooth_l1_loss(pred_box_ob, ann_box_ob)
+    loss = (L_cls + L_box)/batch
+    return loss
     #TODO: write a loss function for SSD
     #
     #For confidence (class labels), use cross entropy (F.cross_entropy)
@@ -106,6 +102,21 @@ class SSD(nn.Module):
             nn.Conv2d(256, 256, kernel_size=3,stride=3,padding=1),
             nn.ReLU(True)
         )
+        self.conv_side1 = conv_basic(256,16,3,1)
+        self.conv_side2 = conv_basic(256,16,3,1)
+        self.conv_side3 = conv_basic(256,16,3,1)
+        self.conv_side4 = conv_basic(256,16,3,1)
+        self.conv_side5 = conv_basic(256,16,3,1)
+        self.conv_side6 = conv_basic(256,16,3,1)
+        self.conv_side7 = nn.Sequential(
+            nn.Conv2d(256, 16, kernel_size=1,stride=1),
+            nn.ReLU(True)
+        )
+        self.conv_side8 = nn.Sequential(
+            nn.Conv2d(256, 16, kernel_size=1,stride=1),
+            nn.ReLU(True)
+        )
+
         #TODO: define layers
         
         
@@ -130,23 +141,31 @@ class SSD(nn.Module):
         out = self.conv12(out)
         out = self.conv13(out)
         # 10 * 10
-        right_res1 = conv_reshape(out,256,16,3,1)
-        left_res1 = conv_reshape(out,256,16,3,1)
+        right_res1 = self.conv_side1(out)
+        right_res1 = right_res1.reshape((right_res1.shape[0],right_res1.shape[1],right_res1.shape[2]*right_res1.shape[3]))
+        left_res1 = self.conv_side2(out)
+        left_res1 = left_res1.reshape((left_res1.shape[0],left_res1.shape[1],left_res1.shape[2]*left_res1.shape[3]))
         out = self.conv14(out)
         out = self.conv15(out)
         # 5 * 5
-        right_res2 = conv_reshape(out,256,16,3,1)
-        left_res2 = conv_reshape(out,256,16,3,1)
+        right_res2 = self.conv_side3(out)
+        right_res2 = right_res2.reshape((right_res2.shape[0],right_res2.shape[1],right_res2.shape[2]*right_res2.shape[3]))
+        left_res2 = self.conv_side4(out)
+        left_res2 = left_res2.reshape((left_res2.shape[0],left_res2.shape[1],left_res2.shape[2]*left_res2.shape[3]))
         out = self.conv16(out)
         out = self.conv17(out)
         # 3 * 3
-        right_res3 = conv_reshape(out,256,16,3,1)
-        left_res3 = conv_reshape(out,256,16,3,1)
+        right_res3 = self.conv_side5(out)
+        right_res3 = right_res3.reshape((right_res3.shape[0],right_res3.shape[1],right_res3.shape[2]*right_res3.shape[3]))
+        left_res3 = self.conv_side6(out)
+        left_res3 = left_res3.reshape((left_res3.shape[0],left_res3.shape[1],left_res3.shape[2]*left_res3.shape[3]))
         out = self.conv18(out)
         out = self.conv19(out)
         # 1 * 1
-        right_res4 = conv_reshape(out,256,16,1,1)
-        left_res4 = conv_reshape(out,256,16,1,1)
+        right_res4 = self.conv_side7(out)
+        right_res4 = right_res4.reshape((right_res4.shape[0],right_res4.shape[1],right_res4.shape[2]*right_res4.shape[3]))
+        left_res4 = self.conv_side8(out)
+        left_res4 = right_res4.reshape((left_res4.shape[0],left_res4.shape[1],left_res4.shape[2]*left_res4.shape[3]))
 
         #should you apply softmax to confidence? (search the pytorch tutorial for F.cross_entropy.) If yes, which dimension should you apply softmax?
         
@@ -164,10 +183,10 @@ class SSD(nn.Module):
         confidence =  torch.permute(confidence, (0, 2, 1))
         bboxes =  torch.permute(bboxes, (0, 2, 1))
         confidence = confidence.reshape((confidence.shape[0],540,self.class_num))
-        m = nn.Softmax()
-        confidence = m(confidence)
+        # m = nn.Softmax()
+        # confidence = m(confidence)
         bboxes = bboxes.reshape((bboxes.shape[0],540,4))
-        return confidence,bboxes
+        return confidence, bboxes
 
 
 

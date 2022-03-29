@@ -63,7 +63,7 @@ def conv_basic(in_planes, out_planes, kernelsize, stride):
 
 import torch
 import torch.nn as nn
-
+from dataset import *
 # x = np.zeros([1,3,320,320])
 # x = torch.Tensor(x)
 # x = conv_basic(3, 64, 3, 2)(x)
@@ -122,9 +122,29 @@ import torch.nn.functional as F
 
 # print(F.smooth_l1_loss(input,target))
 
-pred_confidence, pred_box, ann_confidence = torch.randn(32,540,4), torch.randn(32,540,4), torch.randn(32,540,4)
-ann_box = torch.zeros(32,540,4)
-x = torch.randint(0,100,8)
-ann_box[:,:,-1] = 1
-print()
+# pred_confidence, pred_box, ann_confidence = torch.randn(32,540,4), torch.randn(32,540,4), torch.randn(32,540,4)
+# ann_box = torch.zeros(32,540,4)
+# x = torch.randint(0,100,8)
+# ann_box[:,:,-1] = 1
+# print()
 # print(SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box))
+class_num = 4
+boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
+# print(boxs_default)
+# # res = iou(boxs_default,0, 0, 0.1, 0.1)
+image, ann_box, ann_confidence = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320).__getitem__(9)
+x_obj = []
+x_noob = []
+# for i in range(ann_confidence.shape[0]):
+#     if ann_confidence[i][3] == 1:
+#         x_obj.append(0)
+#         x_noob.append(1)
+#     else:
+#         x_obj.append(1)
+#         x_noob.append(0)
+x = ann_confidence[:,3]
+y = list(filter(lambda z:z==0,x))
+print(y)
+# x,y=torch.randn(540,4), torch.randn(540,4)
+# loss_en = F.cross_entropy(x,y)
+# print(loss_en)

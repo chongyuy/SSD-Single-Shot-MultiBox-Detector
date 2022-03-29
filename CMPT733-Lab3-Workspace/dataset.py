@@ -172,8 +172,15 @@ class COCO(torch.utils.data.Dataset):
         #TODO:
         #1. prepare the image [3,320,320], by reading image "img_name" first.
         image = Image.open(img_name)
+        
         # image =transforms.Resize([self.image_size,self.image_size])(image)
         image = np.asarray(image)
+        if len(image.shape) == 2:
+            img = np.zeros([image.shape[0], image.shape[1], 3])
+            img[:,:,0] = image
+            img[:,:,1] = image
+            img[:,:,2] = image
+            image = img
         height = image.shape[0]
         # width = 640,height = 480
         width = image.shape[1]
@@ -204,7 +211,7 @@ class COCO(torch.utils.data.Dataset):
         #note: please make sure x_min,y_min,x_max,y_max are normalized with respect to the width or height of the image.
         #For example, point (x=100, y=200) in a image with (width=1000, height=500) will be normalized to (x/width=0.1,y/height=0.4)
         image = torch.from_numpy(image)
-        # print(image.shape)
+        image = image.type(torch.FloatTensor)
         image =  torch.permute(image, (2, 0, 1))
         # print(image.shape)
         image =transforms.Resize([self.image_size,self.image_size])(image)
@@ -220,9 +227,10 @@ class COCO(torch.utils.data.Dataset):
 ###############################################################################
 # class_num = 4
 # boxs_default = default_box_generator([10,5,3,1], [0.2,0.4,0.6,0.8], [0.1,0.3,0.5,0.7])
-# print(boxs_default)
-# # res = iou(boxs_default,0, 0, 0.1, 0.1)
-# image, ann_box, ann_confidence = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320).__getitem__(4)
+# # print(boxs_default)
+# # # res = iou(boxs_default,0, 0, 0.1, 0.1)
+# image, ann_box, ann_confidence = COCO("CMPT733-Lab3-Workspace/data/data/data/train/images/", "CMPT733-Lab3-Workspace/data/data/data/train/annotations/", class_num, boxs_default, train = True, image_size=320).__getitem__(9)
+
 # from model import *
 # image = image.reshape((1,image.shape[0],image.shape[1],image.shape[2]))
 # ann_box = ann_box.reshape((1,ann_box.shape[0],ann_box.shape[1]))

@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 from dataset import iou
-
+import torch
 
 colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
 #use [blue green red] to represent different classes
@@ -42,15 +42,38 @@ def visualize_pred(windowname, pred_confidence, pred_box, ann_confidence, ann_bo
             if ann_confidence[i,j]>0.5: #if the network/ground_truth has high confidence on cell[i] with class[j]
                 #TODO:
                 #image1: draw ground truth bounding boxes on image1
+                gt_xcenter = (ann_box[i][0] * boxs_default[i][2]) + boxs_default[i][0]
+                gt_ycenter = (ann_box[i][1] * boxs_default[i][3]) + boxs_default[i][1]
+                gt_box_width = boxs_default[i][2] * np.exp(ann_box[i][2])
+                gt_box_height = boxs_default[i][3] * np.exp(ann_box[i][3])
+                gt_xmin = gt_xcenter - gt_box_width/2
+                gt_ymin = gt_ycenter - gt_box_height/2
+                gt_xmax = gt_xcenter + gt_box_width/2
+                gt_ymax = gt_ycenter + gt_box_height/2
+                gt_xmin = gt_xmin * image.shape[0]
+                gt_ymin = gt_ymin * image.shape[1]
+                gt_xmax = gt_xmax * image.shape[0]
+                gt_ymax = gt_ymax * image.shape[1]
+                start_point = (int(gt_xmin), int(gt_ymin))
+                end_point = (int(gt_xmax), int(gt_ymax)) 
                 #image2: draw ground truth "default" boxes on image2 (to show that you have assigned the object to the correct cell/cells)
-                
+                df_xmin =int(boxs_default[i][4] *  image.shape[0])
+                df_ymin =int(boxs_default[i][5] *  image.shape[1])
+                df_xmax =int(boxs_default[i][6] *  image.shape[0])
+                df_ymax =int(boxs_default[i][7] *  image.shape[1])
+                start_point_df = (df_xmin, df_ymin)
+                end_point_df = (df_xmax, df_ymax)
                 #you can use cv2.rectangle as follows:
                 #start_point = (x1, y1) #top left corner, x1<x2, y1<y2
                 #end_point = (x2, y2) #bottom right corner
                 #color = colors[j] #use red green blue to represent different classes
                 #thickness = 2
-                #cv2.rectangle(image?, start_point, end_point, color, thickness)
-    
+                color1 = (255, 0, 0)
+                thickness = 1
+                image1 = cv2.rectangle(image1, start_point, end_point, colors[j], thickness)
+                image2 = cv2.rectangle(image2, start_point_df, end_point_df, colors[j], thickness)
+
+    # cv2.imwrite(filename, image1)
     #pred
     for i in range(len(pred_confidence)):
         for j in range(class_num):
@@ -58,7 +81,35 @@ def visualize_pred(windowname, pred_confidence, pred_box, ann_confidence, ann_bo
                 #TODO:
                 #image3: draw network-predicted bounding boxes on image3
                 #image4: draw network-predicted "default" boxes on image4 (to show which cell does your network think that contains an object)
-    
+                gt_xcenter = (pred_box[i][0] * boxs_default[i][2]) + boxs_default[i][0]
+                gt_ycenter = (pred_box[i][1] * boxs_default[i][3]) + boxs_default[i][1]
+                gt_box_width = boxs_default[i][2] * np.exp(pred_box[i][2])
+                gt_box_height = boxs_default[i][3] * np.exp(pred_box[i][3])
+                gt_xmin = gt_xcenter - gt_box_width/2
+                gt_ymin = gt_ycenter - gt_box_height/2
+                gt_xmax = gt_xcenter + gt_box_width/2
+                gt_ymax = gt_ycenter + gt_box_height/2
+                gt_xmin = gt_xmin * image.shape[0]
+                gt_ymin = gt_ymin * image.shape[1]
+                gt_xmax = gt_xmax * image.shape[0]
+                gt_ymax = gt_ymax * image.shape[1]
+                start_point = (int(gt_xmin), int(gt_ymin))
+                end_point = (int(gt_xmax), int(gt_ymax)) 
+                df_xmin =int(boxs_default[i][4] *  image.shape[0])
+                df_ymin =int(boxs_default[i][5] *  image.shape[1])
+                df_xmax =int(boxs_default[i][6] *  image.shape[0])
+                df_ymax =int(boxs_default[i][7] *  image.shape[1])
+                start_point_df = (df_xmin, df_ymin)
+                end_point_df = (df_xmax, df_ymax)
+                #you can use cv2.rectangle as follows:
+                #start_point = (x1, y1) #top left corner, x1<x2, y1<y2
+                #end_point = (x2, y2) #bottom right corner
+                #color = colors[j] #use red green blue to represent different classes
+                #thickness = 2
+                color1 = (255, 0, 0)
+                thickness = 1
+                image3 = cv2.rectangle(image3, start_point, end_point, colors[j], thickness)
+                image4 = cv2.rectangle(image4, start_point_df, end_point_df, colors[j], thickness)
     #combine four images into one
     h,w,_ = image1.shape
     image = np.zeros([h*2,w*2,3], np.uint8)
@@ -66,8 +117,8 @@ def visualize_pred(windowname, pred_confidence, pred_box, ann_confidence, ann_bo
     image[:h,w:] = image2
     image[h:,:w] = image3
     image[h:,w:] = image4
-    cv2.imshow(windowname+" [[gt_box,gt_dft],[pd_box,pd_dft]]",image)
-    cv2.waitKey(1)
+    filename = 'savedImage.jpg'
+    cv2.imwrite(filename, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     #if you are using a server, you may not be able to display the image.
     #in that case, please save the image using cv2.imwrite and check the saved image for visualization.
 
@@ -85,8 +136,12 @@ def non_maximum_suppression(confidence_, box_, boxs_default, overlap=0.5, thresh
     #depends on your implementation.
     #if you wish to reuse the visualize_pred function above, you need to return a "suppressed" version of confidence [5,5, num_of_classes].
     #you can also directly return the final bounding boxes and classes, and write a new visualization function for that.
-    
-    
+    x = confidence_[:,0:2]
+    new_confidence = np.zeros((confidence_.shape[0],confidence_.shape[1]))
+    x_noob = np.unravel_index(np.argmax(x), x.shape)
+    new_confidence[x_noob[0]] = confidence_[x_noob[0]]
+    print(new_confidence[x_noob[0]])
+    return new_confidence, box_
     #TODO: non maximum suppression
 
 
