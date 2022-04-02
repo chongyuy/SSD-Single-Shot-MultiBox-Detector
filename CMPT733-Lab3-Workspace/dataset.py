@@ -122,12 +122,12 @@ def match(ann_box,ann_confidence,boxs_default,threshold,cat_id,x_min,y_min,x_max
 
 
 class COCO(torch.utils.data.Dataset):
-    def __init__(self, imgdir, anndir, class_num, boxs_default, train = True, image_size=320):
-        self.train = train
+    def __init__(self, imgdir, anndir, class_num, boxs_default, validate = True, train = True, image_size=320, randomcrop = False):
+        self.validate = validate
         self.imgdir = imgdir
         self.anndir = anndir
         self.class_num = class_num
-        
+        self.train = train
         #overlap threshold for deciding whether a bounding box carries an object or no
         self.threshold = 0.5
         self.boxs_default = boxs_default
@@ -135,16 +135,19 @@ class COCO(torch.utils.data.Dataset):
         
         self.img_names = os.listdir(self.imgdir)
         self.image_size = image_size
-        
+        self.randomcrop = randomcrop
         #notice:
         #you can split the dataset into 90% training and 10% validation here, by slicing self.img_names with respect to self.train
 
     def __len__(self):
         image_train_number = int(len(self.img_names)*0.9)
         if self.train:
-            return len(self.img_names[0:image_train_number])
+            if self.validate:
+                return len(self.img_names[0:image_train_number])
+            else:
+                return len(self.img_names[image_train_number:len(self.img_names)])
         else:
-            return len(self.img_names[image_train_number:len(self.img_names)])
+            return len(self.img_names)
 
     def __getitem__(self, index):
         ann_box = np.zeros([self.box_num,4], np.float32) #bounding boxes
@@ -162,13 +165,15 @@ class COCO(torch.utils.data.Dataset):
         
         image_train = self.img_names[0:image_train_number]
         image_test = self.img_names[image_train_number:len(self.img_names)]
-        if self.train:       
-            img_name = self.imgdir+image_train[index]
-            ann_name = self.anndir+image_train[index][:-3]+"txt"
+        if self.train:
+            if self.validate:       
+                img_name = self.imgdir+image_train[index]
+                ann_name = self.anndir+image_train[index][:-3]+"txt"
+            else:
+                img_name = self.imgdir+image_test[index]
+                ann_name = self.anndir+image_test[index][:-3]+"txt"
         else:
-            img_name = self.imgdir+image_test[index]
-            ann_name = self.anndir+image_test[index][:-3]+"txt"
-        
+            img_name = self.imgdir+self.img_names[index]
         #TODO:
         #1. prepare the image [3,320,320], by reading image "img_name" first.
         image = Image.open(img_name)
@@ -181,26 +186,52 @@ class COCO(torch.utils.data.Dataset):
             img[:,:,1] = image
             img[:,:,2] = image
             image = img
+
+        if self.randomcrop:
+            x = np.random.randint(0,10)
+            y = np.random.randint(0,10)
+            image = image[x:,y:]
+        # print(width)
+        #2. prepare ann_box and ann_confidence, by reading txt file "ann_name" first.
         height = image.shape[0]
         # width = 640,height = 480
         width = image.shape[1]
-        # print(width)
-        #2. prepare ann_box and ann_confidence, by reading txt file "ann_name" first.
-        with open(ann_name, 'r') as f:
-            for line in f:
-                class_id, x_min, y_min, box_width, box_height = line.split()
-                class_id = int(class_id)
-                x_min = float(x_min)
-                y_min = float(y_min)
-                box_width = float(box_width)
-                box_height = float(box_height)
-                x_min_norm = x_min/width
-                y_min_norm = y_min/height
-                box_width_norm = box_width/width
-                box_height_norm = box_height/height
-                x_max_norm,y_max_norm = x_min_norm+box_width_norm, y_min_norm+box_height_norm
-                match(ann_box,ann_confidence,self.boxs_default,self.threshold,class_id,x_min_norm,y_min_norm,x_max_norm,y_max_norm)
-        
+        if self.train:
+            with open(ann_name, 'r') as f:
+                for line in f:
+                    class_id, x_min, y_min, box_width, box_height = line.split()
+                    class_id = int(class_id)
+                    x_min = float(x_min)
+                    y_min = float(y_min)
+                    box_width = float(box_width)
+                    box_height = float(box_height)
+                    if self.randomcrop:
+                        if x_min >= x:
+                            x_min -= x
+                        else:
+                          box_width -= (x-x_min)  
+                          x_min = 0
+                        if y_min >= y:
+                            y_min -= y
+                        else:
+                          box_height -= (y-y_min)  
+                          y_min = 0
+                        x_min = abs(x_min)
+                        y_min = abs(y_min)
+                    x_min_norm = x_min/width
+                    y_min_norm = y_min/height
+                    box_width_norm = box_width/width
+                    box_height_norm = box_height/height
+                    x_max_norm,y_max_norm = x_min_norm+box_width_norm, y_min_norm+box_height_norm
+                    match(ann_box,ann_confidence,self.boxs_default,self.threshold,class_id,x_min_norm,y_min_norm,x_max_norm,y_max_norm)
+            image = torch.from_numpy(image)
+            image = image.type(torch.FloatTensor)
+            image =  torch.permute(image, (2, 0, 1))
+            # print(image.shape)
+            image =transforms.Resize([self.image_size,self.image_size])(image)
+            ann_box = torch.from_numpy(ann_box)
+            ann_confidence = torch.from_numpy(ann_confidence)
+            return image, ann_box, ann_confidence, width,height 
         #3. use the above function "match" to update ann_box and ann_confidence, for each bounding box in "ann_name".
         #4. Data augmentation. You need to implement random cropping first. You can try adding other augmentations to get better results.
         
@@ -210,14 +241,15 @@ class COCO(torch.utils.data.Dataset):
         
         #note: please make sure x_min,y_min,x_max,y_max are normalized with respect to the width or height of the image.
         #For example, point (x=100, y=200) in a image with (width=1000, height=500) will be normalized to (x/width=0.1,y/height=0.4)
-        image = torch.from_numpy(image)
-        image = image.type(torch.FloatTensor)
-        image =  torch.permute(image, (2, 0, 1))
-        # print(image.shape)
-        image =transforms.Resize([self.image_size,self.image_size])(image)
-        ann_box = torch.from_numpy(ann_box)
-        ann_confidence = torch.from_numpy(ann_confidence)
-        return image, ann_box, ann_confidence
+        else:
+            image = torch.from_numpy(image)
+            image = image.type(torch.FloatTensor)
+            image =  torch.permute(image, (2, 0, 1))
+            # print(image.shape)
+            image =transforms.Resize([self.image_size,self.image_size])(image)
+            ann_box = torch.from_numpy(ann_box)
+            ann_confidence = torch.from_numpy(ann_confidence)
+            return image, ann_box, ann_confidence, width, height
 
 
 

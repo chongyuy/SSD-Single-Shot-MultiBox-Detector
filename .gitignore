@@ -1,2 +1,9 @@
 /CMPT733-Lab3-Workspace/data
 .DS_Store
+/CMPT733-Lab3-Workspace/train_annotations
+/CMPT733-Lab3-Workspace/test_annotations
+/CMPT733-Lab3-Workspace/301354567.zip
+/CMPT733-Lab3-Workspace/Assignment3.zip
+/CMPT733-Lab3-Workspace/__pycache__
+network_new.pth
+network.pth

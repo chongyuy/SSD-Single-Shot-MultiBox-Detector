@@ -57,7 +57,7 @@ def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
     ann_box_ob = ann_box[x_obj]
     L_cls = F.cross_entropy(conf_pred_ob, conf_ann_ob) +3 * F.cross_entropy(conf_pred_noob, conf_ann_noob)
     L_box = F.smooth_l1_loss(pred_box_ob, ann_box_ob)
-    loss = (L_cls + L_box)/batch
+    loss = L_cls + L_box
     return loss
     #TODO: write a loss function for SSD
     #
@@ -183,7 +183,7 @@ class SSD(nn.Module):
         confidence =  torch.permute(confidence, (0, 2, 1))
         bboxes =  torch.permute(bboxes, (0, 2, 1))
         confidence = confidence.reshape((confidence.shape[0],540,self.class_num))
-        # m = nn.Softmax()
+        # m = nn.Softmax(dim=2)
         # confidence = m(confidence)
         bboxes = bboxes.reshape((bboxes.shape[0],540,4))
         return confidence, bboxes
